@@ -7,6 +7,9 @@ import { defaultTier, fromPromptCache, fromSamples, type CacheState, type Env, t
 import { samplesFromTranscript } from './core/transcript.js'
 
 const TAIL_BYTES = 512 * 1024
+/** Claude Code reruns the status line every refresh, so a wrapped command that hangs must not block it. */
+const WRAP_TIMEOUT_MS = 2000
+const WRAP_MAX_BUFFER = 16 * 1024 * 1024
 
 const USAGE = `cache-battery: prompt-cache battery for the Claude Code status line
 
@@ -53,17 +56,42 @@ interface Args {
   numbers?: string
 }
 
+/**
+ * Takes `--flag value` and `--flag=value`. Only --help/-h asks for usage: an unknown
+ * flag is ignored, because whatever this prints becomes the user's status line.
+ */
 export function parseArgs(argv: readonly string[]): Args {
   const args: Args = {}
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
-    if (arg === '--wrap') args.wrap = argv[++i]
-    else if (arg === '--cells') args.cells = Number(argv[++i])
-    else if (arg === '--numbers') args.numbers = argv[++i]
+    const eq = arg.startsWith('--') ? arg.indexOf('=') : -1
+    const flag = eq > 0 ? arg.slice(0, eq) : arg
+    const value = () => (eq > 0 ? arg.slice(eq + 1) : argv[++i])
+    if (flag === '--wrap') args.wrap = value()
+    else if (flag === '--cells') args.cells = Number(value())
+    else if (flag === '--numbers') args.numbers = value()
+    else if (flag === '--help' || flag === '-h') args.command = 'help'
     else if (!arg.startsWith('-')) args.command ??= arg
-    else args.command = 'help'
   }
   return args
+}
+
+function parseInput(stdin: string): StatusInput {
+  try {
+    const parsed: unknown = JSON.parse(stdin || '{}')
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as StatusInput) : {}
+  } catch {
+    return {}
+  }
+}
+
+function runWrapped(command: string, stdin: string, env: Env): string {
+  try {
+    const result = spawnSync(command, { shell: true, input: stdin, encoding: 'utf8', env, timeout: WRAP_TIMEOUT_MS, maxBuffer: WRAP_MAX_BUFFER })
+    return result.stdout ?? ''
+  } catch {
+    return ''
+  }
 }
 
 function appendToLastLine(output: string, battery: string): string {
@@ -76,22 +104,20 @@ export function run(argv: readonly string[], stdin: string, env: Env, now: numbe
   const args = parseArgs(argv)
   if (args.command === 'help' || (args.command && !['segment', 'statusline'].includes(args.command))) return USAGE
 
-  let input: StatusInput = {}
+  // A bad payload or a bug here must never cost the user the wrapped status line.
+  let battery = ''
   try {
-    input = JSON.parse(stdin || '{}')
+    const cells = args.cells ?? Number(env.CACHE_BATTERY_CELLS ?? 8)
+    const segments = renderBattery(stateForStatusLine(parseInput(stdin), env), now, {
+      cells: Number.isInteger(cells) && cells > 0 ? cells : 8,
+      numbers: parseNumbers(args.numbers ?? env.CACHE_BATTERY_NUMBERS),
+    })
+    battery = toAnsi(segments, colorEnabled(env))
   } catch {
-    // a malformed payload still lets a wrapped status line print
+    // draw no battery
   }
-  const cells = args.cells ?? Number(env.CACHE_BATTERY_CELLS ?? 8)
-  const segments = renderBattery(stateForStatusLine(input, env), now, {
-    cells: Number.isInteger(cells) && cells > 0 ? cells : 8,
-    numbers: parseNumbers(args.numbers ?? env.CACHE_BATTERY_NUMBERS),
-  })
-  const battery = toAnsi(segments, colorEnabled(env))
   if (!args.wrap) return battery
-
-  const wrapped = spawnSync(args.wrap, { shell: true, input: stdin, encoding: 'utf8', env })
-  return appendToLastLine(wrapped.stdout ?? '', battery)
+  return appendToLastLine(runWrapped(args.wrap, stdin, env), battery)
 }
 
 function isEntryPoint(): boolean {

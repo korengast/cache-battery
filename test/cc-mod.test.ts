@@ -34,6 +34,7 @@ function harness(env: Record<string, string> = {}) {
     advance: (ms: number) => (clock += ms),
     invalidations: () => invalidations,
     tick: () => Promise.all(ticks.map((t) => t())),
+    ticks,
     start: () => handlers.get('session.start')!($, {}, next),
     async step(usage: unknown, agentId?: string) {
       async function* inner() {
@@ -44,12 +45,40 @@ function harness(env: Record<string, string> = {}) {
       while (!r.done) r = await gen.next()
       return r.value
     },
+    /** Starts a step and pauses inside it, as if the request were streaming. */
+    async beginStep(usage: unknown) {
+      let finish!: () => void
+      const done = new Promise<void>((resolve) => (finish = resolve))
+      async function* inner() {
+        await done
+        return { usage }
+      }
+      const gen = handlers.get('turn.step')!($, {}, inner)
+      const pending = (async () => {
+        let r = await gen.next()
+        while (!r.done) r = await gen.next()
+      })()
+      await new Promise((r) => setTimeout(r, 0))
+      return async () => {
+        finish()
+        await pending
+      }
+    },
     render: () => handlers.get('ui.render:{"component":"AbovePrompt"}')!($, { props: {} }, async () => null),
   }
 }
 
 const texts = (tree: any): string =>
   tree.Box.children[0].Box.children[0].Box.children.map((c: any) => c.Text.children.join('')).join('')
+
+/** Empty track cells use the same glyph as filled ones, so count them by colour. */
+const emptyCells = (tree: any): number =>
+  tree.Box.children[0].Box.children[0].Box.children
+    .filter((c: any) => c.Text.color === '#5c5c5c')
+    .reduce((n: number, c: any) => n + c.Text.children.join('').length, 0)
+
+/** turn.step usage as Claude Code 2.1.291 sends it: totals only, no 5m/1h split. */
+const hostUsage = (read: number, write = 0) => ({ input_tokens: 10, output_tokens: 5, cache_read_input_tokens: read, cache_creation_input_tokens: write })
 
 describe('cc mod', () => {
   it('draws nothing before the first request', async () => {
@@ -66,6 +95,56 @@ describe('cc mod', () => {
     await h.step({ cache_read_input_tokens: 500 })
     h.advance(150_000)
     expect(texts(await h.render())).toBe('◔ ████████▌')
+  })
+
+  it('takes the tier from Claude Code settings when the usage has no write split', async () => {
+    const sub = harness()
+    await sub.start()
+    await sub.step(hostUsage(0, 500))
+    expect(texts(await sub.render())).toMatch(/^● /)
+    const env = harness({ CLAUDE_CODE_PROMPT_CACHE_TTL: '5m' })
+    await env.start()
+    await env.step(hostUsage(0, 500))
+    expect(texts(await env.render())).toMatch(/^◔ /)
+  })
+
+  it('drains between requests', async () => {
+    const h = harness({ CACHE_BATTERY_TTL: '5m' })
+    await h.start()
+    await h.step(hostUsage(500))
+    expect(emptyCells(await h.render())).toBe(0)
+    h.advance(150_000)
+    expect(emptyCells(await h.render())).toBe(4)
+  })
+
+  it('stays full while a request is in flight, then anchors on its start', async () => {
+    const h = harness({ CACHE_BATTERY_TTL: '5m' })
+    await h.start()
+    await h.step(hostUsage(500))
+    h.advance(290_000)
+    const finish = await h.beginStep(hostUsage(500))
+    h.advance(60_000)
+    expect(texts(await h.render())).toMatch(/^◔ /)
+    expect(emptyCells(await h.render())).toBe(0)
+    await finish()
+    expect(emptyCells(await h.render())).toBe(1)
+  })
+
+  it('keeps a warm battery after a step with no cache use', async () => {
+    const h = harness({ CACHE_BATTERY_TTL: '5m' })
+    await h.start()
+    await h.step(hostUsage(500))
+    h.advance(60_000)
+    await h.step(hostUsage(0, 0))
+    expect(texts(await h.render())).toMatch(/^◔ /)
+    expect(emptyCells(await h.render())).toBe(1)
+  })
+
+  it('registers one timer however often the session starts', async () => {
+    const h = harness()
+    await h.start()
+    await h.start()
+    expect(h.ticks.length).toBe(1)
   })
 
   it('ignores subagent requests', async () => {

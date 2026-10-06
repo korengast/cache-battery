@@ -17,6 +17,16 @@ describe('parseArgs', () => {
       numbers: 'always',
     })
     expect(parseArgs(['--help']).command).toBe('help')
+    expect(parseArgs(['-h']).command).toBe('help')
+  })
+
+  it('takes --flag=value and ignores unknown flags', () => {
+    expect(parseArgs(['statusline', '--wrap=echo a=b', '--cells=6', '--numbers=never', '--frob'])).toEqual({
+      command: 'statusline',
+      wrap: 'echo a=b',
+      cells: 6,
+      numbers: 'never',
+    })
   })
 })
 
@@ -58,6 +68,25 @@ describe('run', () => {
   it('prints nothing for an unknown cache and tolerates bad JSON', () => {
     expect(run(['segment'], '{}', plain, NOW)).toBe('')
     expect(run(['segment'], 'not json', plain, NOW)).toBe('')
+    expect(run(['segment'], 'null', plain, NOW)).toBe('')
+    expect(run(['segment'], '[1]', plain, NOW)).toBe('')
+    expect(run(['statusline', '--wrap', 'echo mine'], 'null', plain, NOW)).toBe('mine')
+  })
+
+  it('never prints usage into the status line for an unknown or = flag', () => {
+    expect(run(['segment', '--cells=4'], input, plain, NOW)).toBe('◔ ██░░▌')
+    expect(run(['segment', '--frob'], input, plain, NOW)).toBe('◔ ████░░░░▌')
+  })
+
+  it('stops a wrapped command that hangs and still draws the battery', () => {
+    const started = Date.now()
+    expect(run(['statusline', '--wrap', 'echo partial; sleep 10'], input, plain, NOW)).toBe('partial ◔ ████░░░░▌')
+    expect(Date.now() - started).toBeLessThan(5000)
+  })
+
+  it('draws the battery when the wrapped command fails or is missing', () => {
+    expect(run(['statusline', '--wrap', 'exit 3'], input, plain, NOW)).toBe('◔ ████░░░░▌')
+    expect(run(['statusline', '--wrap', 'no-such-command-cb'], input, plain, NOW)).toBe('◔ ████░░░░▌')
   })
 
   it('appends the battery to a wrapped status line', () => {
