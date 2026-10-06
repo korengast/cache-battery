@@ -130,14 +130,18 @@ describe('cc mod', () => {
     expect(emptyCells(await h.render())).toBe(1)
   })
 
-  it('keeps a warm battery after a step with no cache use', async () => {
+  it('keeps a warm battery when a step fails, and clears it after a model that does not cache', async () => {
     const h = harness({ CACHE_BATTERY_TTL: '5m' })
     await h.start()
     await h.step(hostUsage(500))
     h.advance(60_000)
-    await h.step(hostUsage(0, 0))
-    expect(texts(await h.render())).toMatch(/^◔ /)
+    async function* failing(): AsyncGenerator<never, never> {
+      throw new Error('overloaded')
+    }
+    await expect(h.handlers.get('turn.step')!(h.$, {}, failing).next()).rejects.toThrow('overloaded')
     expect(emptyCells(await h.render())).toBe(1)
+    await h.step(hostUsage(0, 0))
+    expect(await h.render()).toBeNull()
   })
 
   it('registers one timer however often the session starts', async () => {

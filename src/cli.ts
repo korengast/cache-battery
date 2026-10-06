@@ -86,6 +86,7 @@ function parseInput(stdin: string): StatusInput {
   }
 }
 
+/** SIGKILL stops the shell; a child it started in the background can outlive it. */
 function runWrapped(command: string, stdin: string, env: Env): string {
   try {
     const result = spawnSync(command, { shell: true, input: stdin, encoding: 'utf8', env, timeout: WRAP_TIMEOUT_MS, killSignal: 'SIGKILL', maxBuffer: WRAP_MAX_BUFFER })

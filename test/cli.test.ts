@@ -91,6 +91,12 @@ describe('run', () => {
     expect(Date.now() - started).toBeLessThan(5000)
   })
 
+  it('keeps output over the default 1 MB buffer and still draws the battery', () => {
+    const out = run(['statusline', '--wrap', 'head -c 2000000 /dev/zero | tr "\\0" a; echo'], input, plain, NOW)
+    expect(out.length).toBe(2_000_000 + ' ◔ ████░░░░▌'.length)
+    expect(out.endsWith('a ◔ ████░░░░▌')).toBe(true)
+  })
+
   it('draws the battery when the wrapped command fails or is missing', () => {
     expect(run(['statusline', '--wrap', 'exit 3'], input, plain, NOW)).toBe('◔ ████░░░░▌')
     expect(run(['statusline', '--wrap', 'no-such-command-cb'], input, plain, NOW)).toBe('◔ ████░░░░▌')
