@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { colorEnabled, parseNumbers, renderBattery, toAnsi } from './core/render.js'
-import { fromSamples, type CacheState, type Env, type Tier, type UsageSample } from './core/state.js'
+import { fromSamples, TTL_MS, type CacheState, type Env, type Tier, type UsageSample } from './core/state.js'
 
 interface PiUsage {
   cacheRead: number
@@ -22,7 +22,15 @@ export interface PiEntry {
 const ESTIMATED_PROVIDERS = new Set(['cursor'])
 
 interface PiModel {
+  provider?: string
   promptCache?: { short?: number; long?: number }
+}
+
+/** A request in flight keeps its cached prefix alive; `lastLiveAt` is when the last one ended. */
+export function liveState(state: CacheState | undefined, inFlight: boolean, at: number, model: PiModel | undefined, lastLiveAt = 0): CacheState | undefined {
+  if (!inFlight) return state && lastLiveAt > state.anchorAt ? { ...state, anchorAt: lastLiveAt } : state
+  if (state) return { ...state, anchorAt: at }
+  return ESTIMATED_PROVIDERS.has(model?.provider ?? '') ? { tier: '5m', anchorAt: at, ttlMs: TTL_MS['5m'], estimated: true } : undefined
 }
 
 export interface PiContext {
@@ -123,6 +131,10 @@ export function createExtension(options: PiOptions = {}) {
     let leafId: string | null | undefined
     let state: CacheState | undefined
     let lastLine: string | undefined
+    let requesting = false
+    let lastLiveAt = 0
+    // Cursor runs its own agent loop: its model calls between pi's saved replies never reach pi.
+    let cursorRun = false
     let places = loadPlaces(env, configPath)
     const renderOptions = { numbers: parseNumbers(env.CACHE_BATTERY_NUMBERS) }
     const color = colorEnabled(env)
@@ -140,7 +152,8 @@ export function createExtension(options: PiOptions = {}) {
         leafId = leaf
         state = fromSamples(samplesFromPiEntries(ctx.sessionManager.getBranch()), piFallbackTier(ctx.model, env))
       }
-      const segments = renderBattery(state, now(), renderOptions)
+      const at = now()
+      const segments = renderBattery(liveState(state, requesting || cursorRun, at, ctx.model, lastLiveAt), at, renderOptions)
       const line = segments.length ? toAnsi(segments, color) : undefined
       if (!force && line === lastLine) return
       lastLine = line
@@ -158,7 +171,27 @@ export function createExtension(options: PiOptions = {}) {
     }
 
     pi.on('session_start', (_event, next) => attach(next))
-    pi.on('message_end', (_event, next) => attach(next))
+    pi.on('agent_start', (_event, next) => {
+      cursorRun = ESTIMATED_PROVIDERS.has(next.model?.provider ?? '')
+      attach(next)
+    })
+    pi.on('agent_end', (_event, next) => {
+      if (cursorRun || requesting) lastLiveAt = now()
+      cursorRun = false
+      requesting = false
+      attach(next)
+    })
+    pi.on('turn_start', (_event, next) => {
+      requesting = true
+      attach(next)
+    })
+    pi.on('message_end', (event, next) => {
+      if ((event as { message?: { role?: string } }).message?.role === 'assistant' && requesting) {
+        requesting = false
+        lastLiveAt = now()
+      }
+      attach(next)
+    })
     pi.on('model_select', (_event, next) => attach(next))
     pi.on('session_shutdown', () => {
       if (timer !== undefined) stopTimer(timer)

@@ -96,7 +96,7 @@ function harness(entries: PiEntry[], env: Record<string, string> = {}) {
     status,
     widgets,
     notes,
-    emit: (e: string) => handlers.get(e)!({}, ctx),
+    emit: (e: string, event: unknown = {}) => handlers.get(e)!(event, ctx),
     command: (args: string) => commands.get('cache-battery')!(args, ctx),
     advance: (ms: number) => (clock += ms),
     setLeaf: (id: string) => (leaf = id),
@@ -104,6 +104,46 @@ function harness(entries: PiEntry[], env: Record<string, string> = {}) {
     cleared: () => cleared,
   }
 }
+
+describe('pi extension while a request runs', () => {
+  it('stays full while a model request streams, then drains from its end', () => {
+    const h = harness([reply(T0, { cacheRead: 50, cacheWrite: 0 })])
+    h.emit('session_start')
+    h.advance(150_000)
+    h.emit('turn_start')
+    h.advance(120_000)
+    h.tick()
+    expect(h.widgets.at(-1)).toEqual(['◔ ████████▌'])
+    h.emit('message_end', { message: { role: 'assistant' } })
+    h.advance(150_000)
+    h.tick()
+    expect(h.widgets.at(-1)).toEqual(['◔ ████░░░░▌'])
+  })
+
+  it('stays full for the whole Cursor run, because pi cannot see the model calls inside it', () => {
+    const h = harness([reply(T0, { cacheRead: 0, cacheWrite: 0 }, 'cursor')])
+    ;(h.ctx.model as any).provider = 'cursor'
+    h.emit('session_start')
+    h.emit('agent_start')
+    h.emit('message_end', { message: { role: 'assistant' } })
+    h.advance(400_000)
+    h.tick()
+    expect(h.widgets.at(-1)).toEqual(['○ ████████▌'])
+    h.emit('agent_end')
+    h.advance(150_000)
+    h.tick()
+    expect(h.widgets.at(-1)).toEqual(['○ ████░░░░▌'])
+  })
+
+  it('shows an estimated battery during the first Cursor run of a session', () => {
+    const h = harness([])
+    ;(h.ctx.model as any).provider = 'cursor'
+    h.emit('session_start')
+    h.emit('agent_start')
+    h.tick()
+    expect(h.widgets.at(-1)).toEqual(['○ ████████▌'])
+  })
+})
 
 describe('pi extension', () => {
   it('shows the battery only above the editor by default', () => {

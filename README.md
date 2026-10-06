@@ -114,6 +114,8 @@ The status line also takes `--numbers` and `--cells`.
 
 ## Accuracy
 
+While a request is in flight the battery stays full, because the request keeps its cached prefix alive; it starts to drain when the reply ends. On Cursor in pi it stays full for the whole agent run, because Cursor's own model calls inside the run never reach pi.
+
 The cache lifetime restarts when a request is sent. The mod anchors on the request start; the status line and pi anchor on the time the response is recorded, so they can read up to one response long. That is negligible against an hour and worth knowing against five minutes.
 
 ## Design
