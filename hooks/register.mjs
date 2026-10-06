@@ -12,10 +12,10 @@ export function register(on) {
   let lastKey = ''
   let options = modOptions({})
   let ticking = false
-  // A main-conversation request in flight keeps its cached prefix alive.
-  let inFlight = false
+  // Main-conversation requests in flight keep their cached prefix alive.
+  let inFlight = 0
 
-  const shown = () => (inFlight && state ? { ...state, anchorAt: now, chargingUntil: undefined } : state)
+  const shown = () => (inFlight > 0 && state ? { ...state, anchorAt: now, chargingUntil: undefined } : state)
 
   on('session.start', async ($, e, next) => {
     // Claude Code does not pass the 5m/1h write split to mods, so the tier follows its own
@@ -57,14 +57,14 @@ export function register(on) {
   on('turn.step', async function* ($, e, next) {
     const startedAt = await $.clock.now()
     if (!e.agentId) {
-      inFlight = true
+      inFlight++
       $.ui.invalidate('ui.render')
     }
     let result
     try {
       result = yield* next(e)
     } finally {
-      if (!e.agentId) inFlight = false
+      if (!e.agentId) inFlight--
     }
     if (e.agentId || !result || !result.usage) return result
     const sample = sampleFromAnthropicUsage(result.usage, startedAt)

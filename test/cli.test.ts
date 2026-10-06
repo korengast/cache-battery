@@ -27,6 +27,7 @@ describe('parseArgs', () => {
       cells: 6,
       numbers: 'never',
     })
+    expect(parseArgs(['segment', '--numbers', '--cells', '4'])).toEqual({ command: 'segment', numbers: undefined, cells: 4 })
   })
 })
 
@@ -81,6 +82,12 @@ describe('run', () => {
   it('stops a wrapped command that hangs and still draws the battery', () => {
     const started = Date.now()
     expect(run(['statusline', '--wrap', 'echo partial; sleep 10'], input, plain, NOW)).toBe('partial ◔ ████░░░░▌')
+    expect(Date.now() - started).toBeLessThan(5000)
+  })
+
+  it('stops a wrapped command that ignores SIGTERM', () => {
+    const started = Date.now()
+    expect(run(['statusline', '--wrap', 'trap "" TERM; echo hi; sleep 6'], input, plain, NOW)).toBe('hi ◔ ████░░░░▌')
     expect(Date.now() - started).toBeLessThan(5000)
   })
 

@@ -22,15 +22,10 @@ describe('fromSamples', () => {
     expect(fromSamples([], '5m')).toBeUndefined()
   })
 
-  it('is unknown when no request used the cache', () => {
-    expect(fromSamples([{ at: T0, cacheRead: 0, cacheWrite: 0 }], '5m')).toBeUndefined()
-  })
-
-  it('keeps the earlier cache when the newest request used none (aborted or failed)', () => {
-    const write = { at: T0, cacheRead: 0, cacheWrite: 900, write1h: 900 }
-    const old = { at: T0 + 500, cacheRead: 100, cacheWrite: 0 }
+  it('is unknown when the newest request reported no cache use (a provider that does not cache)', () => {
+    const old = { at: T0, cacheRead: 100, cacheWrite: 0 }
     const off = { at: T0 + 1000, cacheRead: 0, cacheWrite: 0 }
-    expect(fromSamples([write, old, off], '5m')).toEqual({ tier: '1h', anchorAt: T0 + 500, ttlMs: TTL_MS['1h'] })
+    expect(fromSamples([old, off], '5m')).toBeUndefined()
   })
 
   it('anchors on the newest request and takes the tier from the newest non-zero write bucket', () => {

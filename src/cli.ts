@@ -66,7 +66,8 @@ export function parseArgs(argv: readonly string[]): Args {
     const arg = argv[i]
     const eq = arg.startsWith('--') ? arg.indexOf('=') : -1
     const flag = eq > 0 ? arg.slice(0, eq) : arg
-    const value = () => (eq > 0 ? arg.slice(eq + 1) : argv[++i])
+    // a missing value never swallows the next flag
+    const value = () => (eq > 0 ? arg.slice(eq + 1) : argv[i + 1]?.startsWith('--') ? undefined : argv[++i])
     if (flag === '--wrap') args.wrap = value()
     else if (flag === '--cells') args.cells = Number(value())
     else if (flag === '--numbers') args.numbers = value()
@@ -87,7 +88,7 @@ function parseInput(stdin: string): StatusInput {
 
 function runWrapped(command: string, stdin: string, env: Env): string {
   try {
-    const result = spawnSync(command, { shell: true, input: stdin, encoding: 'utf8', env, timeout: WRAP_TIMEOUT_MS, maxBuffer: WRAP_MAX_BUFFER })
+    const result = spawnSync(command, { shell: true, input: stdin, encoding: 'utf8', env, timeout: WRAP_TIMEOUT_MS, killSignal: 'SIGKILL', maxBuffer: WRAP_MAX_BUFFER })
     return result.stdout ?? ''
   } catch {
     return ''

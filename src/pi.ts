@@ -15,11 +15,13 @@ export interface PiEntry {
   timestamp: string
   kind?: string
   usage?: PiUsage
-  message?: { role?: string; provider?: string; usage?: PiUsage }
+  message?: { role?: string; provider?: string; stopReason?: string; usage?: PiUsage }
 }
 
 /** Cursor's SDK reports usage once per agent run, so most of its replies carry no cache numbers. */
 const ESTIMATED_PROVIDERS = new Set(['cursor'])
+
+const FAILED_STOPS = new Set(['error', 'aborted'])
 
 interface PiModel {
   provider?: string
@@ -76,6 +78,8 @@ export function samplesFromPiEntries(entries: readonly PiEntry[]): UsageSample[]
     if (entry.type === 'message' && entry.message?.role === 'assistant' && entry.message.usage) {
       const sample = sampleOf(entry.message.usage, at, false)
       const noNumbers = sample.cacheRead + sample.cacheWrite <= 0
+      // A failed or cancelled reply with no numbers says nothing about the cache before it.
+      if (noNumbers && FAILED_STOPS.has(entry.message.stopReason ?? '')) continue
       samples.push(noNumbers && ESTIMATED_PROVIDERS.has(entry.message.provider ?? '') ? { ...sample, estimated: true } : sample)
     }
     else if (entry.type === 'usage' && entry.kind === 'cache_warm' && entry.usage) samples.push(sampleOf(entry.usage, at, true))
