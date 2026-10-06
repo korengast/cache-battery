@@ -37,6 +37,8 @@ describe('piFallbackTier', () => {
 describe('parsePlaces', () => {
   it('accepts the four places', () => {
     expect(parsePlaces(' Above ')).toBe('above')
+    expect(parsePlaces('below')).toBe('footer')
+    expect(parsePlaces('both')).toBeUndefined()
     expect(parsePlaces('nope')).toBeUndefined()
   })
 })
@@ -88,22 +90,22 @@ function harness(entries: PiEntry[], env: Record<string, string> = {}) {
 }
 
 describe('pi extension', () => {
-  it('shows the battery in the footer and above the editor by default', () => {
+  it('shows the battery only above the editor by default', () => {
     const h = harness([reply(T0, { cacheRead: 50, cacheWrite: 0 })])
     h.emit('session_start')
-    expect(h.status.at(-1)).toBe('◔ ████████▌')
     expect(h.widgets.at(-1)).toEqual(['◔ ████████▌'])
+    expect(h.status.at(-1)).toBeUndefined()
   })
 
   it('drains on the timer and only repaints when the line changes', () => {
     const h = harness([reply(T0, { cacheRead: 50, cacheWrite: 0 })])
     h.emit('session_start')
-    const paints = h.status.length
+    const paints = h.widgets.length
     h.tick()
-    expect(h.status.length).toBe(paints)
+    expect(h.widgets.length).toBe(paints)
     h.advance(150_000)
     h.tick()
-    expect(h.status.at(-1)).toBe('◔ ████░░░░▌')
+    expect(h.widgets.at(-1)).toEqual(['◔ ████░░░░▌'])
   })
 
   it('re-reads the branch when the leaf changes, so a warmer refresh shows charging', () => {
@@ -114,7 +116,7 @@ describe('pi extension', () => {
     entries.push({ type: 'usage', kind: 'cache_warm', timestamp: iso(T0 + 270_000), usage: { cacheRead: 50, cacheWrite: 0 } })
     h.setLeaf('b')
     h.tick()
-    expect(h.status.at(-1)).toBe('◔ ████████▌ ⚡')
+    expect(h.widgets.at(-1)).toEqual(['◔ ████████▌ ⚡'])
   })
 
   it('clears both places when the provider reports no cache use', () => {
@@ -129,6 +131,7 @@ describe('pi extension', () => {
     h.ctx.hasUI = false
     h.emit('session_start')
     expect(h.status).toEqual([])
+    expect(h.widgets).toEqual([])
   })
 
   it('switches places with /cache-battery and saves the choice', async () => {
@@ -144,14 +147,14 @@ describe('pi extension', () => {
     expect(h.notes.at(-1)).toContain('Unknown place')
   })
 
-  it('reads the saved place, lets env override it, and clears on shutdown', () => {
-    const h = harness([reply(T0, { cacheRead: 5, cacheWrite: 0 })], { CACHE_BATTERY_PLACES: 'above' })
+  it('lets env override the place and clears on shutdown', () => {
+    const h = harness([reply(T0, { cacheRead: 5, cacheWrite: 0 })], { CACHE_BATTERY_PLACES: 'below' })
     h.emit('session_start')
-    expect(h.status.at(-1)).toBeUndefined()
-    expect(h.widgets.at(-1)).toEqual(['◔ ████████▌'])
+    expect(h.status.at(-1)).toBe('◔ ████████▌')
+    expect(h.widgets.at(-1)).toBeUndefined()
     h.emit('session_shutdown')
     expect(h.cleared()).toBe(true)
-    expect(h.widgets.at(-1)).toBeUndefined()
+    expect(h.status.at(-1)).toBeUndefined()
   })
 
   it('loads a saved place from the config file', () => {
@@ -170,5 +173,23 @@ describe('pi extension', () => {
       ui: { setStatus: (_k: string, t: string) => status.push(t), setWidget: () => {}, notify: () => {} },
     })
     expect(status).toEqual([undefined])
+  })
+
+  it('treats a saved "both" from an older version as the default', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'cb-old-'))
+    const configPath = join(dir, 'c.json')
+    writeFileSync(configPath, JSON.stringify({ places: 'both' }))
+    const widgets: unknown[] = []
+    const handlers = new Map<string, any>()
+    createExtension({ env: { NO_COLOR: '1' }, configPath, now: () => T0, setInterval: () => ({}) })({
+      on: (e, h) => handlers.set(e, h),
+      registerCommand: () => {},
+    })
+    handlers.get('session_start')({}, {
+      hasUI: true,
+      sessionManager: { getBranch: () => [reply(T0, { cacheRead: 5, cacheWrite: 0 })], getLeafId: () => 'a' },
+      ui: { setStatus: () => {}, setWidget: (_k: string, w: unknown) => widgets.push(w), notify: () => {} },
+    })
+    expect(widgets).toEqual([['◔ ████████▌']])
   })
 })

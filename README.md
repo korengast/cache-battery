@@ -68,9 +68,9 @@ Start a new session afterwards. The mod draws the battery above the prompt and u
 
 ## pi
 
-pi has no separate mod system; its extensions do the same job. The extension draws the battery above the editor and in the footer.
+pi has no separate mod system; its extensions do the same job. The extension draws the battery above the editor by default, or in the footer below it.
 
-![pi: widget above the editor, footer below](docs/img/pi-full.png)
+![pi: battery above the editor](docs/img/pi-full.png)
 ![pi: last minute](docs/img/pi-low.png)
 ![pi: cold](docs/img/pi-cold.png)
 
@@ -81,9 +81,8 @@ pi install git:github.com/korengast/cache-battery
 Choose where it shows (saved in `~/.pi/agent/cache-battery.json`):
 
 ```
-/cache-battery both     # default
-/cache-battery footer
-/cache-battery above
+/cache-battery above    # default: above the editor
+/cache-battery footer   # in the footer below the editor (also: below)
 /cache-battery off
 ```
 
@@ -96,7 +95,7 @@ The extension reads the cache usage pi stores on each assistant message. The tie
 | `CACHE_BATTERY_NUMBERS` | `end` | `end`: numbers near the end only; `always`; `never` |
 | `CACHE_BATTERY_CELLS` | `8` | battery width in cells |
 | `CACHE_BATTERY_TTL` | auto | force the tier (`5m` or `1h`) when it cannot be read |
-| `CACHE_BATTERY_PLACES` | saved choice | pi only: `footer`, `above`, `both`, `off` |
+| `CACHE_BATTERY_PLACES` | saved choice, else `above` | pi only: `above`, `footer` (or `below`), `off` |
 | `NO_COLOR` | unset | plain glyphs, no colour |
 
 The status line also takes `--numbers` and `--cells`.

@@ -3,7 +3,8 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { colorEnabled, parseNumbers, renderBattery, toAnsi } from './core/render.js';
 import { fromSamples } from './core/state.js';
-const PLACES = ['footer', 'above', 'both', 'off'];
+const PLACES = ['above', 'footer', 'off'];
+const DEFAULT_PLACE = 'above';
 const KEY = 'cache-battery';
 const CONFIG_PATH = join(homedir(), '.pi', 'agent', 'cache-battery.json');
 function sampleOf(usage, at, refresh) {
@@ -39,17 +40,18 @@ export function piFallbackTier(model, env) {
     return long !== undefined && long >= 3600 ? '1h' : '5m';
 }
 export function parsePlaces(value) {
-    return PLACES.find((p) => p === value?.trim().toLowerCase());
+    const wanted = value?.trim().toLowerCase();
+    return PLACES.find((p) => p === (wanted === 'below' ? 'footer' : wanted));
 }
 function loadPlaces(env, path) {
     const fromEnv = parsePlaces(env.CACHE_BATTERY_PLACES);
     if (fromEnv)
         return fromEnv;
     try {
-        return parsePlaces(JSON.parse(readFileSync(path, 'utf8')).places) ?? 'both';
+        return parsePlaces(JSON.parse(readFileSync(path, 'utf8')).places) ?? DEFAULT_PLACE;
     }
     catch {
-        return 'both';
+        return DEFAULT_PLACE;
     }
 }
 function savePlaces(places, path) {
@@ -74,10 +76,8 @@ export function createExtension(options = {}) {
         const paint = (line) => {
             if (!ctx)
                 return;
-            const footer = places === 'footer' || places === 'both';
-            const above = places === 'above' || places === 'both';
-            ctx.ui.setStatus(KEY, footer ? line : undefined);
-            ctx.ui.setWidget(KEY, above && line ? [line] : undefined);
+            ctx.ui.setStatus(KEY, places === 'footer' ? line : undefined);
+            ctx.ui.setWidget(KEY, places === 'above' && line ? [line] : undefined);
         };
         const tick = (force = false) => {
             if (!ctx?.hasUI)
@@ -114,14 +114,14 @@ export function createExtension(options = {}) {
             ctx = undefined;
         });
         pi.registerCommand(KEY, {
-            description: 'Where the cache battery shows: footer, above (the editor), both, or off',
+            description: 'Where the cache battery shows: above (the editor, default), footer (below), or off',
             handler: async (args, next) => {
                 ctx = next;
                 const wanted = parsePlaces(args);
                 if (!args.trim())
-                    return next.ui.notify(`cache-battery shows: ${places}. Use /cache-battery footer|above|both|off.`, 'info');
+                    return next.ui.notify(`cache-battery shows: ${places}. Use /cache-battery above|footer|off.`, 'info');
                 if (!wanted)
-                    return next.ui.notify(`Unknown place "${args.trim()}". Use footer, above, both, or off.`, 'warning');
+                    return next.ui.notify(`Unknown place "${args.trim()}". Use above, footer (or below), or off.`, 'warning');
                 places = wanted;
                 try {
                     savePlaces(places, configPath);
