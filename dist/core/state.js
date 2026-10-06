@@ -22,6 +22,8 @@ export function tierOf(sample) {
  */
 export function fromSamples(samples, fallback) {
     const newest = samples.at(-1);
+    if (newest?.estimated)
+        return { tier: '5m', anchorAt: newest.at, ttlMs: TTL_MS['5m'], estimated: true };
     if (!newest || newest.cacheRead + newest.cacheWrite <= 0)
         return undefined;
     let tier = fallback;

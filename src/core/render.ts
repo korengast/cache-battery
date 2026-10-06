@@ -16,6 +16,7 @@ export interface RenderOptions {
 
 const EIGHTHS = ['', '▏', '▎', '▍', '▌', '▋', '▊', '▉']
 const BADGE = { '5m': '◔', '1h': '●' } as const
+const ESTIMATED_BADGE = '○'
 const CAP = '▌'
 const EMPTY_GLYPH = '░'
 const MINUTE = 60_000
@@ -38,7 +39,7 @@ export function renderBattery(state: CacheState | undefined, now: number, option
   const used = full + (partial ? 1 : 0)
 
   const segments: Segment[] = [
-    { kind: 'text', text: `${BADGE[state.tier]} `, tone: 'dim' },
+    { kind: 'text', text: `${state.estimated ? ESTIMATED_BADGE : BADGE[state.tier]} `, tone: 'dim' },
     { kind: 'fill', text: '█'.repeat(full) + partial, tone },
   ]
   if (used < cells) segments.push({ kind: 'empty', count: cells - used })

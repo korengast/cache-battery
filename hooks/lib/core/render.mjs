@@ -1,6 +1,7 @@
 import { fraction, remainingMs } from './state.mjs';
 const EIGHTHS = ['', '▏', '▎', '▍', '▌', '▋', '▊', '▉'];
 const BADGE = { '5m': '◔', '1h': '●' };
+const ESTIMATED_BADGE = '○';
 const CAP = '▌';
 const EMPTY_GLYPH = '░';
 const MINUTE = 60_000;
@@ -20,7 +21,7 @@ export function renderBattery(state, now, options = {}) {
     const partial = EIGHTHS[eighths % 8];
     const used = full + (partial ? 1 : 0);
     const segments = [
-        { kind: 'text', text: `${BADGE[state.tier]} `, tone: 'dim' },
+        { kind: 'text', text: `${state.estimated ? ESTIMATED_BADGE : BADGE[state.tier]} `, tone: 'dim' },
         { kind: 'fill', text: '█'.repeat(full) + partial, tone },
     ];
     if (used < cells)

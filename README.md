@@ -9,6 +9,7 @@ It works in [Claude Code](https://code.claude.com) (status line and mod) and in 
 |---|---|
 | `◔` | 5-minute cache tier |
 | `●` | 1-hour cache tier |
+| `○` | estimated: the provider reports no cache numbers per request ([Cursor in pi](#cursor-estimated)) |
 | green / yellow / red | more than 50% / 20–50% / under 20% of the cache lifetime left |
 | `42s` | seconds, in the last minute only |
 | `4m` | minutes, in the last 5 minutes of a 1-hour cache only |
@@ -87,6 +88,17 @@ Choose where it shows (saved in `~/.pi/agent/cache-battery.json`):
 ```
 
 The extension reads the cache usage pi stores on each assistant message. The tier comes from the `cacheWrite1h` share of the newest cache write; when no write says which, it follows pi's own retention: the model's long lifetime with `PI_CACHE_RETENTION=long`, else the short one. When pi's cache warmer (`cacheWarming`) refreshes the cache, the battery refills and shows `⚡`.
+
+<a id="cursor-estimated"></a>
+### Cursor (estimated)
+
+With the [`pi-cursor-sdk`](https://github.com/fitchmultz/pi-cursor-sdk) provider, the battery is an estimate and shows `○` instead of `◔`.
+
+Cursor reports token usage once per agent run, not per model request. The SDK sends it only on `turn-ended`, the `cursor-agent` CLI only in its final `result` event, and the Cursor dashboard lists one usage event per run. Inside a run, pi gets one assistant message per model request, but with no cache numbers.
+
+The extension uses what it does know: each Cursor reply is a model request, so it restarts a 5-minute timer at that reply. What the battery cannot know is whether Cursor's backend kept the cache warm. In practice Cursor sometimes writes the whole prompt again on a new run even a few minutes after the last one, and sometimes reads it back after ten. Read `○` as "time since the last request", not as a promise that the next message is cheap.
+
+When a Cursor reply does carry real cache numbers (some run-final replies do), the battery uses them and shows the normal badge.
 
 ## Settings
 

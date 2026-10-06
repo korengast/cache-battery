@@ -6,7 +6,7 @@ import { createExtension, parsePlaces, piFallbackTier, samplesFromPiEntries, typ
 
 const T0 = 1_800_000_000_000
 const iso = (ms: number) => new Date(ms).toISOString()
-const reply = (at: number, usage: Record<string, number>): PiEntry => ({ type: 'message', timestamp: iso(at), message: { role: 'assistant', usage: usage as any } })
+const reply = (at: number, usage: Record<string, number>, provider?: string): PiEntry => ({ type: 'message', timestamp: iso(at), message: { role: 'assistant', provider, usage: usage as any } })
 
 describe('samplesFromPiEntries', () => {
   it('reads assistant replies and cache-warmer refreshes', () => {
@@ -21,6 +21,22 @@ describe('samplesFromPiEntries', () => {
       { at: T0 + 1, cacheRead: 0, cacheWrite: 100, write1h: 0, write5m: 100, refresh: false },
       { at: T0 + 2, cacheRead: 100, cacheWrite: 0, write1h: undefined, write5m: undefined, refresh: true },
     ])
+  })
+})
+
+describe('cursor replies', () => {
+  it('count as estimated refreshes when Cursor reports no cache numbers', () => {
+    expect(samplesFromPiEntries([reply(T0, { cacheRead: 0, cacheWrite: 0 }, 'cursor')])).toEqual([
+      { at: T0, cacheRead: 0, cacheWrite: 0, write1h: undefined, write5m: undefined, refresh: false, estimated: true },
+    ])
+  })
+
+  it('keep real numbers when Cursor reports them', () => {
+    expect(samplesFromPiEntries([reply(T0, { cacheRead: 5, cacheWrite: 9 }, 'cursor')])[0].estimated).toBeUndefined()
+  })
+
+  it('stay unestimated on other providers', () => {
+    expect(samplesFromPiEntries([reply(T0, { cacheRead: 0, cacheWrite: 0 }, 'openai')])[0].estimated).toBeUndefined()
   })
 })
 

@@ -67,3 +67,9 @@ describe('toAnsi', () => {
     expect(toAnsi(renderBattery(five, T0 + 150_000), false)).toBe('◔ ████░░░░▌')
   })
 })
+
+describe('estimated state', () => {
+  it('shows a hollow badge so the battery reads as a guess', () => {
+    expect(toPlain(renderBattery({ ...five, estimated: true }, T0))).toBe('○ ████████▌')
+  })
+})

@@ -11,6 +11,8 @@ export interface CacheState {
   ttlMs: number
   /** A host-sent refresh (pi's cache warmer) shows a charging marker until this time. */
   chargingUntil?: number
+  /** Timed from a request that carried no cache numbers, so warm/cold is a guess. */
+  estimated?: boolean
 }
 
 export interface UsageSample {
@@ -20,6 +22,8 @@ export interface UsageSample {
   write1h?: number
   write5m?: number
   refresh?: boolean
+  /** The host saw a request but its provider reports no per-request cache numbers. */
+  estimated?: boolean
 }
 
 export interface AnthropicUsage {
@@ -59,6 +63,7 @@ export function tierOf(sample: UsageSample): Tier | undefined {
  */
 export function fromSamples(samples: readonly UsageSample[], fallback: Tier): CacheState | undefined {
   const newest = samples.at(-1)
+  if (newest?.estimated) return { tier: '5m', anchorAt: newest.at, ttlMs: TTL_MS['5m'], estimated: true }
   if (!newest || newest.cacheRead + newest.cacheWrite <= 0) return undefined
   let tier = fallback
   for (let i = samples.length - 1; i >= 0; i--) {

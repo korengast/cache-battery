@@ -3,6 +3,8 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { colorEnabled, parseNumbers, renderBattery, toAnsi } from './core/render.js';
 import { fromSamples } from './core/state.js';
+/** Cursor's SDK reports usage once per agent run, so most of its replies carry no cache numbers. */
+const ESTIMATED_PROVIDERS = new Set(['cursor']);
 const PLACES = ['above', 'footer', 'off'];
 const DEFAULT_PLACE = 'above';
 const KEY = 'cache-battery';
@@ -25,8 +27,11 @@ export function samplesFromPiEntries(entries) {
         const at = Date.parse(entry.timestamp);
         if (Number.isNaN(at))
             continue;
-        if (entry.type === 'message' && entry.message?.role === 'assistant' && entry.message.usage)
-            samples.push(sampleOf(entry.message.usage, at, false));
+        if (entry.type === 'message' && entry.message?.role === 'assistant' && entry.message.usage) {
+            const sample = sampleOf(entry.message.usage, at, false);
+            const noNumbers = sample.cacheRead + sample.cacheWrite <= 0;
+            samples.push(noNumbers && ESTIMATED_PROVIDERS.has(entry.message.provider ?? '') ? { ...sample, estimated: true } : sample);
+        }
         else if (entry.type === 'usage' && entry.kind === 'cache_warm' && entry.usage)
             samples.push(sampleOf(entry.usage, at, true));
     }

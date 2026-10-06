@@ -81,3 +81,15 @@ describe('defaultTier', () => {
     expect(defaultTier({ CACHE_BATTERY_TTL: '5m' })).toBe('5m')
   })
 })
+
+describe('estimated samples', () => {
+  it('treat a request without cache numbers as a 5m refresh and mark the state as estimated', () => {
+    const state = fromSamples([{ at: T0, cacheRead: 0, cacheWrite: 0, estimated: true }], '1h')
+    expect(state).toEqual({ tier: '5m', anchorAt: T0, ttlMs: TTL_MS['5m'], estimated: true })
+  })
+
+  it('give way to real numbers on a newer sample', () => {
+    const state = fromSamples([{ at: T0, cacheRead: 0, cacheWrite: 0, estimated: true }, { at: T0 + 5, cacheRead: 10, cacheWrite: 0 }], '5m')
+    expect(state).toEqual({ tier: '5m', anchorAt: T0 + 5, ttlMs: TTL_MS['5m'] })
+  })
+})
