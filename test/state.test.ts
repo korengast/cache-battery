@@ -22,10 +22,15 @@ describe('fromSamples', () => {
     expect(fromSamples([], '5m')).toBeUndefined()
   })
 
-  it('is unknown when the newest request reported no cache use', () => {
-    const old = { at: T0, cacheRead: 100, cacheWrite: 0 }
+  it('is unknown when no request used the cache', () => {
+    expect(fromSamples([{ at: T0, cacheRead: 0, cacheWrite: 0 }], '5m')).toBeUndefined()
+  })
+
+  it('keeps the earlier cache when the newest request used none (aborted or failed)', () => {
+    const write = { at: T0, cacheRead: 0, cacheWrite: 900, write1h: 900 }
+    const old = { at: T0 + 500, cacheRead: 100, cacheWrite: 0 }
     const off = { at: T0 + 1000, cacheRead: 0, cacheWrite: 0 }
-    expect(fromSamples([old, off], '5m')).toBeUndefined()
+    expect(fromSamples([write, old, off], '5m')).toEqual({ tier: '1h', anchorAt: T0 + 500, ttlMs: TTL_MS['1h'] })
   })
 
   it('anchors on the newest request and takes the tier from the newest non-zero write bucket', () => {
@@ -79,6 +84,20 @@ describe('defaultTier', () => {
     expect(defaultTier({ CLAUDE_CODE_USE_BEDROCK: '1' })).toBe('5m')
     expect(defaultTier({ FORCE_PROMPT_CACHING_5M: '1', ENABLE_PROMPT_CACHING_1H: '1' })).toBe('5m')
     expect(defaultTier({ CACHE_BATTERY_TTL: '5m' })).toBe('5m')
+  })
+
+  it('reads CLAUDE_CODE_PROMPT_CACHE_TTL after FORCE_PROMPT_CACHING_5M, as Claude Code does', () => {
+    expect(defaultTier({ CLAUDE_CODE_PROMPT_CACHE_TTL: '5m' })).toBe('5m')
+    expect(defaultTier({ ANTHROPIC_API_KEY: 'x', CLAUDE_CODE_PROMPT_CACHE_TTL: '1h' })).toBe('1h')
+    expect(defaultTier({ FORCE_PROMPT_CACHING_5M: '1', CLAUDE_CODE_PROMPT_CACHE_TTL: '1h' })).toBe('5m')
+    expect(defaultTier({ CLAUDE_CODE_PROMPT_CACHE_TTL: 'soon' })).toBe('1h')
+  })
+
+  it('reads boolean env values as Claude Code does and counts an auth token as metered', () => {
+    expect(defaultTier({ FORCE_PROMPT_CACHING_5M: '0' })).toBe('1h')
+    expect(defaultTier({ FORCE_PROMPT_CACHING_5M: 'true' })).toBe('5m')
+    expect(defaultTier({ CLAUDE_CODE_USE_BEDROCK: 'false' })).toBe('1h')
+    expect(defaultTier({ ANTHROPIC_AUTH_TOKEN: 't' })).toBe('5m')
   })
 })
 

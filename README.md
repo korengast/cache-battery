@@ -16,7 +16,7 @@ It works in [Claude Code](https://code.claude.com) (status line and mod) and in 
 | `❄` + empty battery | the cache is cold: the next message rewrites the whole prompt |
 | `⚡` | pi's cache warmer just refreshed the cache (no message from you) |
 
-When the cache state is unknown (before the first request, or on a provider that reports no cache use), nothing is drawn.
+When the cache state is unknown (before the first request, or on a provider that reports no cache use), nothing is drawn. A request that fails or is cancelled does not clear the battery: the cache from the request before it is still warm.
 
 ## Claude Code
 
@@ -44,7 +44,7 @@ If you have no status line yet, or want one setup:
 }
 ```
 
-`--wrap` runs your current status line with the same input and appends the battery to its last line. Leave it out to print only the battery.
+`--wrap` runs your current status line with the same input and appends the battery to its last line. Leave it out to print only the battery. A wrapped command that takes longer than 2 seconds is stopped, and the battery still prints.
 
 If you already have your own script, add the segment to it instead:
 
@@ -63,7 +63,7 @@ claude plugin marketplace add korengast/cache-battery
 claude plugin install cache-battery@cache-battery
 ```
 
-Start a new session afterwards. The mod draws the battery above the prompt and updates it every second. It reads the cache usage of every main-conversation request (`turn.step`), so it knows the tier as soon as a request writes to the cache. Until then it assumes Claude Code's own default: 1 hour on a subscription, 5 minutes on an API key or a cloud provider.
+Start a new session afterwards. The mod draws the battery above the prompt and updates it every second. It times the cache from every main-conversation request (`turn.step`). Claude Code does not tell mods which tier a request wrote, so the mod follows Claude Code's own rule: `FORCE_PROMPT_CACHING_5M`, then `CLAUDE_CODE_PROMPT_CACHE_TTL`, then 1 hour on a subscription and 5 minutes on an API key or a cloud provider. It cannot see the `promptCacheTtl` setting or a subscription in overage; set `CACHE_BATTERY_TTL` if your tier differs. The status line reads the real tier.
 
 **When the mod does not load.** Claude Code rolls mods out with a remote feature flag. That flag service is off when the session uses a third-party provider (Bedrock, Vertex, Foundry, or a custom `ANTHROPIC_BASE_URL`) or when telemetry is off, and then no mod loads. Use the status line in those setups. A first-party session with telemetry off can still use the flag cached from an earlier session with `CLAUDE_CODE_GB_DISK_CACHE_WHEN_TELEMETRY_OFF=1`. `claude --debug` logs why a mod did not load.
 
@@ -106,7 +106,7 @@ When a Cursor reply does carry real cache numbers (some run-final replies do), t
 |---|---|---|
 | `CACHE_BATTERY_NUMBERS` | `end` | `end`: numbers near the end only; `always`; `never` |
 | `CACHE_BATTERY_CELLS` | `8` | battery width in cells |
-| `CACHE_BATTERY_TTL` | auto | force the tier (`5m` or `1h`) when it cannot be read |
+| `CACHE_BATTERY_TTL` | auto | force the tier (`5m` or `1h`) where it cannot be read (the mod, old Claude Code, pi when no cache write names it) |
 | `CACHE_BATTERY_PLACES` | saved choice, else `above` | pi only: `above`, `footer` (or `below`), `off` |
 | `NO_COLOR` | unset | plain glyphs, no colour |
 
@@ -114,9 +114,9 @@ The status line also takes `--numbers` and `--cells`.
 
 ## Accuracy
 
-While a request is in flight the battery stays full, because the request keeps its cached prefix alive; it starts to drain when the reply ends. On Cursor in pi it stays full for the whole agent run, because Cursor's own model calls inside the run never reach pi.
+In the mod and in pi the battery stays full while a request is in flight, because the request keeps its cached prefix alive; it starts to drain when the reply ends. On Cursor in pi it stays full for the whole agent run, because Cursor's own model calls inside the run never reach pi. The status line cannot see a request start: it keeps draining during a reply and refills when Claude Code reports the new deadline.
 
-The cache lifetime restarts when a request is sent. The mod anchors on the request start; the status line and pi anchor on the time the response is recorded, so they can read up to one response long. That is negligible against an hour and worth knowing against five minutes.
+The cache lifetime restarts when a request is sent. The mod anchors on the request start and the status line on Claude Code 2.1.251+ uses Claude Code's own deadline; the transcript fallback and pi anchor on the time the response is recorded, so they can read up to one response long. That is negligible against an hour and worth knowing against five minutes.
 
 ## Design
 

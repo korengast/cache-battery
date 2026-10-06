@@ -57,16 +57,21 @@ export function tierOf(sample: UsageSample): Tier | undefined {
   return undefined
 }
 
+const usesCache = (s: UsageSample) => s.estimated || s.cacheRead + s.cacheWrite > 0
+
 /**
- * Cache-reading requests record empty write buckets, so the tier comes from the
- * newest request that wrote, not from the newest request.
+ * Anchors on the newest request that used the cache: an aborted or failed request
+ * records zero usage but leaves the earlier cache warm. Cache-reading requests record
+ * empty write buckets, so the tier comes from the newest request that wrote.
  */
 export function fromSamples(samples: readonly UsageSample[], fallback: Tier): CacheState | undefined {
-  const newest = samples.at(-1)
-  if (newest?.estimated) return { tier: '5m', anchorAt: newest.at, ttlMs: TTL_MS['5m'], estimated: true }
-  if (!newest || newest.cacheRead + newest.cacheWrite <= 0) return undefined
+  let last = samples.length - 1
+  while (last >= 0 && !usesCache(samples[last])) last--
+  if (last < 0) return undefined
+  const newest = samples[last]
+  if (newest.estimated) return { tier: '5m', anchorAt: newest.at, ttlMs: TTL_MS['5m'], estimated: true }
   let tier = fallback
-  for (let i = samples.length - 1; i >= 0; i--) {
+  for (let i = last; i >= 0; i--) {
     const found = tierOf(samples[i])
     if (found) {
       tier = found
@@ -86,12 +91,25 @@ export function fromPromptCache(field: PromptCacheField | undefined): CacheState
   return { tier, anchorAt, ttlMs }
 }
 
-/** Mirrors Claude Code's TTL choice: 1h on a subscription, 5m on API keys and cloud providers. */
+const isTier = (value: string | undefined): value is Tier => value === '5m' || value === '1h'
+const truthy = (value: string | undefined) => /^(1|true|yes|on)$/i.test(value?.trim() ?? '')
+
+/**
+ * Mirrors Claude Code's TTL choice in its order: FORCE_PROMPT_CACHING_5M, then
+ * CLAUDE_CODE_PROMPT_CACHE_TTL, then 1h on a subscription and 5m on API keys and cloud
+ * providers. The promptCacheTtl setting and subscription overage are not visible here.
+ */
 export function defaultTier(env: Env): Tier {
-  if (env.CACHE_BATTERY_TTL === '5m' || env.CACHE_BATTERY_TTL === '1h') return env.CACHE_BATTERY_TTL
-  if (env.FORCE_PROMPT_CACHING_5M) return '5m'
-  if (env.ENABLE_PROMPT_CACHING_1H) return '1h'
-  const metered = env.ANTHROPIC_API_KEY || env.CLAUDE_CODE_USE_BEDROCK || env.CLAUDE_CODE_USE_VERTEX || env.CLAUDE_CODE_USE_FOUNDRY
+  if (isTier(env.CACHE_BATTERY_TTL)) return env.CACHE_BATTERY_TTL
+  if (truthy(env.FORCE_PROMPT_CACHING_5M)) return '5m'
+  if (isTier(env.CLAUDE_CODE_PROMPT_CACHE_TTL)) return env.CLAUDE_CODE_PROMPT_CACHE_TTL
+  if (truthy(env.ENABLE_PROMPT_CACHING_1H)) return '1h'
+  const metered =
+    env.ANTHROPIC_API_KEY ||
+    env.ANTHROPIC_AUTH_TOKEN ||
+    truthy(env.CLAUDE_CODE_USE_BEDROCK) ||
+    truthy(env.CLAUDE_CODE_USE_VERTEX) ||
+    truthy(env.CLAUDE_CODE_USE_FOUNDRY)
   return metered ? '5m' : '1h'
 }
 
