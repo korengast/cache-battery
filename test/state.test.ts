@@ -93,6 +93,7 @@ describe('defaultTier', () => {
     expect(defaultTier({ FORCE_PROMPT_CACHING_5M: 'true' })).toBe('5m')
     expect(defaultTier({ CLAUDE_CODE_USE_BEDROCK: 'false' })).toBe('1h')
     expect(defaultTier({ ANTHROPIC_AUTH_TOKEN: 't' })).toBe('5m')
+    expect(defaultTier({ CLAUDE_CODE_USE_BEDROCK: '1', ENABLE_PROMPT_CACHING_1H_BEDROCK: '1' })).toBe('1h')
   })
 })
 

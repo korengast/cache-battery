@@ -64,13 +64,17 @@ export function register(on) {
     try {
       result = yield* next(e)
     } finally {
-      if (!e.agentId) inFlight--
+      if (!e.agentId) {
+        inFlight--
+        $.ui.invalidate('ui.render')
+      }
     }
     if (e.agentId || !result || !result.usage) return result
     const sample = sampleFromAnthropicUsage(result.usage, startedAt)
     tier = tierOf(sample) ?? tier
-    // A step with no cache use (aborted, failed) leaves the earlier cache warm.
-    state = fromSamples([sample], tier) ?? state
+    // A failed or cancelled step throws or has no usage and keeps the state above; a
+    // finished step with no cache use means a model that does not cache.
+    state = fromSamples([sample], tier)
     $.ui.invalidate('ui.render')
     return result
   })

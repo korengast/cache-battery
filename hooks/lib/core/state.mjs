@@ -52,8 +52,9 @@ const isTier = (value) => value === '5m' || value === '1h';
 const truthy = (value) => /^(1|true|yes|on)$/i.test(value?.trim() ?? '');
 /**
  * Mirrors Claude Code's TTL choice in its order: FORCE_PROMPT_CACHING_5M, then
- * CLAUDE_CODE_PROMPT_CACHE_TTL, then 1h on a subscription and 5m on API keys and cloud
- * providers. The promptCacheTtl setting and subscription overage are not visible here.
+ * CLAUDE_CODE_PROMPT_CACHE_TTL, then ENABLE_PROMPT_CACHING_1H (or its Bedrock variant),
+ * then 1h on a subscription and 5m on API keys and cloud providers. The promptCacheTtl
+ * setting and subscription overage are not visible here.
  */
 export function defaultTier(env) {
     if (isTier(env.CACHE_BATTERY_TTL))
@@ -63,6 +64,8 @@ export function defaultTier(env) {
     if (isTier(env.CLAUDE_CODE_PROMPT_CACHE_TTL))
         return env.CLAUDE_CODE_PROMPT_CACHE_TTL;
     if (truthy(env.ENABLE_PROMPT_CACHING_1H))
+        return '1h';
+    if (truthy(env.CLAUDE_CODE_USE_BEDROCK) && truthy(env.ENABLE_PROMPT_CACHING_1H_BEDROCK))
         return '1h';
     const metered = env.ANTHROPIC_API_KEY ||
         env.ANTHROPIC_AUTH_TOKEN ||
