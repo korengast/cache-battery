@@ -1,0 +1,47 @@
+{
+  "name": "cache-battery",
+  "version": "0.1.0",
+  "description": "A draining-battery prompt-cache timer for Claude Code (status line + mod) and pi.",
+  "type": "module",
+  "license": "MIT",
+  "author": "korengast",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/korengast/cache-battery.git"
+  },
+  "keywords": [
+    "claude-code",
+    "claude-mod",
+    "statusline",
+    "prompt-cache",
+    "pi-package"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "cache-battery": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "hooks",
+    ".claude-plugin"
+  ],
+  "pi": {
+    "extensions": [
+      "./dist/pi.js"
+    ]
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && chmod +x dist/cli.js && node scripts/build-mod.mjs",
+    "test": "vitest run",
+    "coverage": "vitest run --coverage",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "@vitest/coverage-v8": "^5.0.3",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  }
+}

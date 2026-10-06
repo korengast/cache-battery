@@ -1,0 +1,4 @@
+{
+  "description": "cache-battery: prompt-cache battery above the prompt",
+  "modules": ["./register.mjs"]
+}

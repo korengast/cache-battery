@@ -1,0 +1,14 @@
+{
+  "name": "cache-battery",
+  "description": "A draining-battery prompt-cache timer above the Claude Code prompt",
+  "owner": {
+    "name": "korengast"
+  },
+  "plugins": [
+    {
+      "name": "cache-battery",
+      "source": "./",
+      "description": "Shows the prompt cache as a draining battery above the prompt: 5m or 1h tier, seconds in the last minute, a snowflake when cold"
+    }
+  ]
+}
