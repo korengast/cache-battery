@@ -28,7 +28,7 @@ The battery above the prompt is the mod; the one in the status line is the statu
 ### Status line
 
 ```bash
-npm install -g github:korengast/cache-battery
+npm install -g https://codeload.github.com/korengast/cache-battery/tar.gz/main
 ```
 
 If you have no status line yet, or want one setup:
