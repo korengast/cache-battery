@@ -14,6 +14,9 @@ export function samplesFromTranscript(text) {
         }
         if (row.type !== 'assistant' || row.isSidechain || !row.message?.usage)
             continue;
+        // Claude Code writes an all-zero row for an API error or a cancelled reply; the cache before it is still warm.
+        if (row.isApiErrorMessage || row.message.model === '<synthetic>')
+            continue;
         const at = Date.parse(row.timestamp ?? '');
         if (Number.isNaN(at))
             continue;

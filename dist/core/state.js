@@ -16,23 +16,19 @@ export function tierOf(sample) {
         return '5m';
     return undefined;
 }
-const usesCache = (s) => s.estimated || s.cacheRead + s.cacheWrite > 0;
 /**
- * Anchors on the newest request that used the cache: an aborted or failed request
- * records zero usage but leaves the earlier cache warm. Cache-reading requests record
- * empty write buckets, so the tier comes from the newest request that wrote.
+ * A newest request with no cache use means a provider that does not cache, so the
+ * state is unknown; adapters drop failed and cancelled requests before this. Cache-reading
+ * requests record empty write buckets, so the tier comes from the newest request that wrote.
  */
 export function fromSamples(samples, fallback) {
-    let last = samples.length - 1;
-    while (last >= 0 && !usesCache(samples[last]))
-        last--;
-    if (last < 0)
-        return undefined;
-    const newest = samples[last];
-    if (newest.estimated)
+    const newest = samples.at(-1);
+    if (newest?.estimated)
         return { tier: '5m', anchorAt: newest.at, ttlMs: TTL_MS['5m'], estimated: true };
+    if (!newest || newest.cacheRead + newest.cacheWrite <= 0)
+        return undefined;
     let tier = fallback;
-    for (let i = last; i >= 0; i--) {
+    for (let i = samples.length - 1; i >= 0; i--) {
         const found = tierOf(samples[i]);
         if (found) {
             tier = found;

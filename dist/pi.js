@@ -5,6 +5,7 @@ import { colorEnabled, parseNumbers, renderBattery, toAnsi } from './core/render
 import { fromSamples, TTL_MS } from './core/state.js';
 /** Cursor's SDK reports usage once per agent run, so most of its replies carry no cache numbers. */
 const ESTIMATED_PROVIDERS = new Set(['cursor']);
+const FAILED_STOPS = new Set(['error', 'aborted']);
 /** A request in flight keeps its cached prefix alive; `lastLiveAt` is when the last one ended. */
 export function liveState(state, inFlight, at, model, lastLiveAt = 0) {
     if (!inFlight)
@@ -38,6 +39,9 @@ export function samplesFromPiEntries(entries) {
         if (entry.type === 'message' && entry.message?.role === 'assistant' && entry.message.usage) {
             const sample = sampleOf(entry.message.usage, at, false);
             const noNumbers = sample.cacheRead + sample.cacheWrite <= 0;
+            // A failed or cancelled reply with no numbers says nothing about the cache before it.
+            if (noNumbers && FAILED_STOPS.has(entry.message.stopReason ?? ''))
+                continue;
             samples.push(noNumbers && ESTIMATED_PROVIDERS.has(entry.message.provider ?? '') ? { ...sample, estimated: true } : sample);
         }
         else if (entry.type === 'usage' && entry.kind === 'cache_warm' && entry.usage)

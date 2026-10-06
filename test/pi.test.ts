@@ -24,6 +24,23 @@ describe('samplesFromPiEntries', () => {
   })
 })
 
+describe('failed replies', () => {
+  const failed = (at: number, stopReason: string, usage: Record<string, number>): PiEntry => ({
+    type: 'message',
+    timestamp: iso(at),
+    message: { role: 'assistant', stopReason, usage: usage as any },
+  })
+
+  it('are skipped when they carry no cache numbers, so the cache before them still shows', () => {
+    const entries = [reply(T0, { cacheRead: 50, cacheWrite: 0 }), failed(T0 + 1, 'error', { cacheRead: 0, cacheWrite: 0 }), failed(T0 + 2, 'aborted', {})]
+    expect(samplesFromPiEntries(entries).map((s) => s.at)).toEqual([T0])
+  })
+
+  it('count when they still report cache use', () => {
+    expect(samplesFromPiEntries([failed(T0, 'aborted', { cacheRead: 50, cacheWrite: 0 })])).toHaveLength(1)
+  })
+})
+
 describe('cursor replies', () => {
   it('count as estimated refreshes when Cursor reports no cache numbers', () => {
     expect(samplesFromPiEntries([reply(T0, { cacheRead: 0, cacheWrite: 0 }, 'cursor')])).toEqual([
@@ -173,6 +190,16 @@ describe('pi extension', () => {
     h.setLeaf('b')
     h.tick()
     expect(h.widgets.at(-1)).toEqual(['◔ ████████▌ ⚡'])
+  })
+
+  it('draws nothing after a switch to a provider that does not cache', () => {
+    const h = harness([reply(T0, { cacheRead: 50, cacheWrite: 0 }, 'anthropic'), reply(T0 + 60_000, { cacheRead: 0, cacheWrite: 0 }, 'ollama')])
+    h.emit('session_start')
+    expect(h.widgets.at(-1)).toBeUndefined()
+    h.emit('turn_start')
+    h.emit('message_end', { message: { role: 'assistant' } })
+    h.tick()
+    expect(h.widgets.at(-1)).toBeUndefined()
   })
 
   it('clears both places when the provider reports no cache use', () => {
