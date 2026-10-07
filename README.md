@@ -3,6 +3,10 @@
 A prompt-cache timer you read at a glance: the cache is a battery that drains until it goes cold.
 It works in [Claude Code](https://code.claude.com) (status line and mod) and in [pi](https://pi.dev).
 
+[![Demo: Claude Code mod, Claude Code status line, pi above the editor, pi footer](docs/img/demo-poster.png)](docs/video/demo.mp4)
+
+The demo shows four real sessions on a 5-minute cache: the Claude Code mod, the Claude Code status line, and pi with the battery above the editor and in the footer. The drain runs at 100× speed and the last 5 seconds at 4×. pi runs on xAI Grok here.
+
 ![Battery states](docs/img/states.png)
 
 | Glyph | Meaning |
