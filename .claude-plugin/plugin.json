@@ -1,6 +1,6 @@
 {
   "name": "cache-battery",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Shows the prompt cache as a draining battery above the prompt: 5m or 1h tier, seconds in the last minute, a snowflake when cold",
   "author": {
     "name": "korengast"

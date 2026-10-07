@@ -1,6 +1,6 @@
 {
   "name": "cache-battery",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A draining-battery prompt-cache timer for Claude Code (status line + mod) and pi.",
   "type": "module",
   "license": "MIT",
