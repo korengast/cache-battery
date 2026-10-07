@@ -12,5 +12,8 @@ const rows = [
   ['1h · plenty left', hour, 600_000],
   ['1h · last 5 minutes', hour, 3_360_000],
   ['pi warmer refresh', { ...five, chargingUntil: 5_000 }, 1_000],
+  ['estimated (Cursor in pi)', { ...five, estimated: true }, 90_000],
 ]
-for (const [label, state, at] of rows) console.log(`${label.padEnd(22)}${toAnsi(renderBattery(state, at), true)}`)
+// A blank line between rows: block glyphs on adjacent lines merge into one shape.
+const lines = rows.map(([label, state, at]) => `  ${label.padEnd(26)}${toAnsi(renderBattery(state, at), true)}`)
+console.log('\n' + lines.join('\n\n') + '\n')
